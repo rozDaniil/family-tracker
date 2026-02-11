@@ -131,6 +131,84 @@ class AuthSessionOut(BaseModel):
     member_id: UUID
 
 
+class SignupIn(BaseModel):
+    email: str = Field(min_length=5, max_length=255)
+    password: str = Field(min_length=8, max_length=120)
+    display_name: str = Field(min_length=1, max_length=120)
+    remember_me: bool = False
+
+
+class LoginIn(BaseModel):
+    email: str = Field(min_length=5, max_length=255)
+    password: str = Field(min_length=8, max_length=120)
+    remember_me: bool = False
+
+
+class AuthUserOut(BaseModel):
+    id: UUID
+    display_name: str
+    email: str | None
+    email_verified: bool
+    avatar_url: str | None
+
+
+class SessionOut(BaseModel):
+    user: AuthUserOut
+    project: FamilyProjectOut
+    member: MemberOut
+    email_verified: bool
+
+
+class VerifyEmailResendIn(BaseModel):
+    email: str = Field(min_length=5, max_length=255)
+
+
+class VerifyEmailConfirmIn(BaseModel):
+    token: str = Field(min_length=16)
+
+
+class PasswordForgotIn(BaseModel):
+    email: str = Field(min_length=5, max_length=255)
+
+
+class PasswordResetIn(BaseModel):
+    token: str = Field(min_length=16)
+    password: str = Field(min_length=8, max_length=120)
+
+
+class ProfileOut(BaseModel):
+    user_id: UUID
+    display_name: str
+    email: str | None
+    email_verified: bool
+    avatar_url: str | None
+    birthday: date | None
+    can_change_password: bool
+
+
+class ProfilePatchIn(BaseModel):
+    display_name: str | None = Field(default=None, min_length=1, max_length=120)
+    avatar_url: str | None = Field(default=None, max_length=255)
+    birthday: date | None = None
+
+
+class PasswordChangeIn(BaseModel):
+    current_password: str = Field(min_length=1, max_length=120)
+    new_password: str = Field(min_length=8, max_length=120)
+
+
+class CircleContactOut(BaseModel):
+    member_id: UUID
+    user_id: UUID
+    display_name: str
+    avatar_url: str | None
+    nickname: str | None
+
+
+class CircleNicknamePatchIn(BaseModel):
+    nickname: str | None = Field(default=None, max_length=120)
+
+
 class InviteCreateIn(BaseModel):
     expires_in_hours: int | None = Field(default=72, ge=1, le=720)
 

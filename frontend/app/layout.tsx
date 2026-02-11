@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Cormorant_Garamond, JetBrains_Mono, Nunito_Sans } from "next/font/google";
+import { Toaster } from "sonner";
 import { AppShell } from "@/components/app-shell";
 import "./globals.css";
 
@@ -35,6 +36,14 @@ export default function RootLayout({
         className={`${nunitoSans.variable} ${jetbrainsMono.variable} ${cormorant.variable} antialiased`}
       >
         <AppShell>{children}</AppShell>
+        <Toaster
+          richColors
+          position="top-right"
+          toastOptions={{
+            className:
+              "border border-[var(--line)] bg-white text-[var(--foreground)] shadow-[0_8px_28px_rgba(89,66,39,.16)]",
+          }}
+        />
       </body>
     </html>
   );

@@ -10,7 +10,7 @@ import type { CalendarLens, Category, EventItem, Member } from "@/lib/types";
 import { useSessionStore } from "@/stores/session-store";
 
 const WEEKDAY_LABELS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"] as const;
-const LENS_COLORS = ["#C45A3A", "#2E7D9A", "#5E8F3D", "#9D4E9F", "#D18A1E", "#2F9C8C", "#C14F75", "#7A5A3A"] as const;
+const LENS_COLORS: string[] = ["#C45A3A", "#2E7D9A", "#5E8F3D", "#9D4E9F", "#D18A1E", "#2F9C8C", "#C14F75", "#7A5A3A", "#1F6A8A", "#B54830", "#4B7D2D", "#8A3D8C"];
 
 function toDateKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -59,12 +59,14 @@ function daysInRange(from: string, to: string): string[] {
   return values;
 }
 
-function colorByLensId(lensId: string): string {
-  let hash = 0;
-  for (let i = 0; i < lensId.length; i += 1) {
-    hash = (hash * 31 + lensId.charCodeAt(i)) >>> 0;
+function generateDistinctColors(count: number): string[] {
+  if (count <= LENS_COLORS.length) return [...LENS_COLORS.slice(0, count)];
+  const result = [...LENS_COLORS];
+  for (let i = LENS_COLORS.length; i < count; i += 1) {
+    const hue = Math.round((i * 137.508) % 360);
+    result.push(`hsl(${hue} 58% 46%)`);
   }
-  return LENS_COLORS[hash % LENS_COLORS.length];
+  return result;
 }
 
 function compareEventsStable(a: EventItem, b: EventItem): number {
@@ -126,10 +128,11 @@ export default function TodayPage() {
   );
   const monthCells = useMemo(() => buildMonthGrid(cursorMonth), [cursorMonth]);
   const lensMap = useMemo(() => new Map(lenses.map((lens) => [lens.id, lens])), [lenses]);
-  const lensColorMap = useMemo(
-    () => new Map(lenses.map((lens) => [lens.id, colorByLensId(lens.id)])),
-    [lenses],
-  );
+  const lensColorMap = useMemo(() => {
+    const ordered = [...lenses].sort((a, b) => a.created_at.localeCompare(b.created_at));
+    const colors = generateDistinctColors(ordered.length);
+    return new Map(ordered.map((lens, idx) => [lens.id, colors[idx]]));
+  }, [lenses]);
   const monthTitle = cursorMonth.toLocaleDateString("ru-RU", {
     month: "long",
     year: "numeric",
@@ -270,7 +273,7 @@ export default function TodayPage() {
                       </p>
                     );
                   })}
-                  {cellEvents.length > 3 ? <p className="text-[10px] text-[color:rgba(63,58,52,.72)]">+{cellEvents.length - 3}</p> : null}
+                  {cellEvents.length > 3 ? <p className="text-[10px] text-[color:rgba(63,58,52,.72)]">и еще несколько событий</p> : null}
                 </div>
               </button>
             );

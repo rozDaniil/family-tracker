@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { CalendarDays, Clock3, Home, LayoutGrid, Tags, Users } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { CalendarDays, CircleUserRound, Clock3, Home, LayoutGrid, Tags, Users } from "lucide-react";
 import { useEffect } from "react";
 import { useSessionStore } from "@/stores/session-store";
 
@@ -11,16 +11,39 @@ const NAV_ITEMS = [
   { href: "/calendars", label: "Календари", icon: LayoutGrid, exact: false },
   { href: "/timeline", label: "Таймлайн", icon: Clock3, exact: true },
   { href: "/categories", label: "Категории", icon: Tags, exact: true },
+  { href: "/profile", label: "Профиль", icon: CircleUserRound, exact: false },
   { href: "/family", label: "Моя Семья", icon: Users, exact: true },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { ensureSession, loading, project } = useSessionStore();
+  const router = useRouter();
+  const { ensureSession, loading, project, token } = useSessionStore();
 
   useEffect(() => {
+    if (pathname.startsWith("/auth")) return;
     void ensureSession();
-  }, [ensureSession]);
+  }, [ensureSession, pathname]);
+
+  useEffect(() => {
+    if (loading) return;
+    const isAuthPage = pathname.startsWith("/auth");
+    if (!token && !isAuthPage) {
+      router.replace("/auth");
+      return;
+    }
+    if (token && isAuthPage) {
+      router.replace("/");
+    }
+  }, [loading, pathname, router, token]);
+
+  if (pathname.startsWith("/auth")) {
+    return <div className="min-h-screen p-4 md:p-6">{children}</div>;
+  }
+
+  if (loading || !token) {
+    return <div className="min-h-screen bg-[var(--bg)]" />;
+  }
 
   return (
     <div className="min-h-screen p-4 md:p-6">

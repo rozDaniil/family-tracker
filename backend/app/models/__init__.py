@@ -1,13 +1,17 @@
 from app.models.entities import (
     CalendarLens,
     Category,
+    EmailToken,
+    EmailTokenPurpose,
     Event,
     EventKind,
     FamilyProject,
     InviteLink,
     LensView,
+    LocalNickname,
     Member,
     MemberStatus,
+    RefreshSession,
     User,
 )
 
@@ -18,8 +22,12 @@ __all__ = [
     "MemberStatus",
     "Category",
     "Event",
+    "EmailToken",
+    "EmailTokenPurpose",
     "EventKind",
     "InviteLink",
     "CalendarLens",
     "LensView",
+    "LocalNickname",
+    "RefreshSession",
 ]

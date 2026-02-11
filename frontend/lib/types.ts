@@ -10,6 +10,39 @@ export interface SessionPayload {
   member_id: UUID;
 }
 
+export interface SessionUser {
+  id: UUID;
+  display_name: string;
+  email: string | null;
+  email_verified: boolean;
+  avatar_url?: string | null;
+}
+
+export interface SessionStatePayload {
+  user: SessionUser;
+  project: FamilyProject;
+  member: Member;
+  email_verified: boolean;
+}
+
+export interface ProfileItem {
+  user_id: UUID;
+  display_name: string;
+  email: string | null;
+  email_verified: boolean;
+  avatar_url: string | null;
+  birthday: string | null;
+  can_change_password: boolean;
+}
+
+export interface CircleContact {
+  member_id: UUID;
+  user_id: UUID;
+  display_name: string;
+  avatar_url: string | null;
+  nickname: string | null;
+}
+
 export interface FamilyProject {
   id: UUID;
   name: string;

@@ -14,6 +14,8 @@ import {
   X,
 } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
+import { DatePicker } from "@/components/ui/date-picker";
+import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { api } from "@/lib/api";
 import type { CalendarLens, Category, EventItem, Member } from "@/lib/types";
 import { useSessionStore } from "@/stores/session-store";
@@ -481,7 +483,8 @@ export default function CalendarsPage() {
     if (!token || !editing || !selectedLens) return;
     setSavingEdit(true);
     try {
-      const endDate = editing.mode === "range" ? editing.endDate : editing.date;
+      const endDate =
+        editing.mode === "range" ? editing.endDate || editing.date : editing.date;
       const scopedMemberIds = editing.memberIds.filter((id) =>
         availableMemberIds.has(id),
       );
@@ -528,6 +531,8 @@ export default function CalendarsPage() {
 
   const noteMode = watch("mode");
   const watchedMemberIds = watch("member_ids");
+  const watchedDate = watch("date");
+  const watchedEndDate = watch("end_date");
   const selectedMemberIds = useMemo(
     () => watchedMemberIds ?? [],
     [watchedMemberIds],
@@ -727,11 +732,11 @@ export default function CalendarsPage() {
                                 </p>
                               );
                             })}
-                            {cellEvents.length > 3 ? (
-                              <p className="text-[10px] text-[color:rgba(63,58,52,.72)]">
-                                +{cellEvents.length - 3}
-                              </p>
-                            ) : null}
+                          {cellEvents.length > 3 ? (
+                            <p className="text-[10px] text-[color:rgba(63,58,52,.72)]">
+                              и еще несколько событий
+                            </p>
+                          ) : null}
                           </div>
                         </button>
                       );
@@ -784,18 +789,27 @@ export default function CalendarsPage() {
                     rows={2}
                     className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm outline-none"
                   />
-                  <input
-                    {...register("date")}
-                    type="date"
-                    className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm outline-none"
-                  />
-                  {noteMode === "range" ? (
-                    <input
-                      {...register("end_date")}
-                      type="date"
-                      className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm outline-none"
+                  <input type="hidden" {...register("date")} />
+                  <input type="hidden" {...register("end_date")} />
+                  {noteMode === "day" ? (
+                    <DatePicker
+                      value={watchedDate}
+                      onChange={(value) =>
+                        setValue("date", value, { shouldValidate: true })
+                      }
+                      placeholder="Дата события"
                     />
-                  ) : null}
+                  ) : (
+                    <DateRangePicker
+                      from={watchedDate}
+                      to={watchedEndDate}
+                      onChange={({ from, to }) => {
+                        setValue("date", from, { shouldValidate: true });
+                        setValue("end_date", to, { shouldValidate: true });
+                      }}
+                      placeholder="Диапазон события"
+                    />
+                  )}
                   {errors.end_date ? (
                     <p className="text-xs text-[color:#8B5D55]">
                       {errors.end_date.message}
@@ -842,66 +856,70 @@ export default function CalendarsPage() {
                   ) : selectedDateEvents.length === 0 ? (
                     <EmptyState title="На эту дату пока пусто" />
                   ) : (
-                    selectedDateEvents.map((event) => {
-                      const color =
-                        categoryMap.get(event.category_id ?? "")?.color ??
-                        "#B48F68";
-                      const membersText = (
-                        event.member_ids?.length
-                          ? event.member_ids
-                          : event.member_id
-                            ? [event.member_id]
-                            : []
-                      )
-                        .map((id) => memberMap.get(id)?.display_name)
-                        .filter(Boolean)
-                        .join(", ");
-                      return (
-                        <article
-                          key={`${event.id}-${selectedDate}`}
-                          className={`rounded-xl border p-3 text-sm ${focusedEventId === event.id ? "border-[var(--accent)] bg-[var(--panel-soft)]" : "border-[var(--line)]"}`}
-                          style={{
-                            backgroundColor: `${color}22`,
-                            borderLeft: `4px solid ${color}`,
-                          }}
-                        >
-                          <p className="font-semibold">{event.title}</p>
-                          <p className="mt-1 text-xs text-[color:rgba(63,58,52,.68)]">
-                            {event.date_local}
-                            {event.end_date_local &&
-                            event.end_date_local !== event.date_local
-                              ? ` -> ${event.end_date_local}`
-                              : ""}
-                          </p>
-                          {event.description ? (
-                            <p className="mt-1 text-xs text-[color:rgba(63,58,52,.75)]">
-                              {event.description}
+                    <div
+                      className={`space-y-2 ${selectedDateEvents.length >= 3 ? "max-h-[420px] overflow-y-auto pr-1" : ""}`}
+                    >
+                      {selectedDateEvents.map((event) => {
+                        const color =
+                          categoryMap.get(event.category_id ?? "")?.color ??
+                          "#B48F68";
+                        const membersText = (
+                          event.member_ids?.length
+                            ? event.member_ids
+                            : event.member_id
+                              ? [event.member_id]
+                              : []
+                        )
+                          .map((id) => memberMap.get(id)?.display_name)
+                          .filter(Boolean)
+                          .join(", ");
+                        return (
+                          <article
+                            key={`${event.id}-${selectedDate}`}
+                            className={`rounded-xl border p-3 text-sm ${focusedEventId === event.id ? "border-[var(--accent)] bg-[var(--panel-soft)]" : "border-[var(--line)]"}`}
+                            style={{
+                              backgroundColor: `${color}22`,
+                              borderLeft: `4px solid ${color}`,
+                            }}
+                          >
+                            <p className="font-semibold">{event.title}</p>
+                            <p className="mt-1 text-xs text-[color:rgba(63,58,52,.68)]">
+                              {event.date_local}
+                              {event.end_date_local &&
+                              event.end_date_local !== event.date_local
+                                ? ` -> ${event.end_date_local}`
+                                : ""}
                             </p>
-                          ) : null}
-                          {membersText ? (
-                            <p className="mt-1 text-xs text-[color:rgba(63,58,52,.72)]">
-                              Участники: {membersText}
-                            </p>
-                          ) : null}
-                          <div className="mt-2 flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => openEdit(event)}
-                              className="rounded-lg bg-white px-2 py-1 text-xs"
-                            >
-                              Редактировать
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDeleteEventModalId(event.id)}
-                              className="rounded-lg bg-white px-2 py-1 text-xs text-[color:#8B3A2E]"
-                            >
-                              Удалить
-                            </button>
-                          </div>
-                        </article>
-                      );
-                    })
+                            {event.description ? (
+                              <p className="mt-1 text-xs text-[color:rgba(63,58,52,.75)]">
+                                {event.description}
+                              </p>
+                            ) : null}
+                            {membersText ? (
+                              <p className="mt-1 text-xs text-[color:rgba(63,58,52,.72)]">
+                                Участники: {membersText}
+                              </p>
+                            ) : null}
+                            <div className="mt-2 flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => openEdit(event)}
+                                className="rounded-lg bg-white px-2 py-1 text-xs"
+                              >
+                                Редактировать
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeleteEventModalId(event.id)}
+                                className="rounded-lg bg-white px-2 py-1 text-xs text-[color:#8B3A2E]"
+                              >
+                                Удалить
+                              </button>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               </aside>
@@ -1162,28 +1180,28 @@ export default function CalendarsPage() {
                 rows={2}
                 className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm outline-none"
               />
-              <input
-                type="date"
-                value={editing.date}
-                onChange={(event) =>
-                  setEditing((value) =>
-                    value ? { ...value, date: event.target.value } : value,
-                  )
-                }
-                className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm outline-none"
-              />
-              {editing.mode === "range" ? (
-                <input
-                  type="date"
-                  value={editing.endDate}
-                  onChange={(event) =>
-                    setEditing((value) =>
-                      value ? { ...value, endDate: event.target.value } : value,
+              {editing.mode === "day" ? (
+                <DatePicker
+                  value={editing.date}
+                  onChange={(value) =>
+                    setEditing((current) =>
+                      current ? { ...current, date: value } : current,
                     )
                   }
-                  className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm outline-none"
+                  placeholder="Дата события"
                 />
-              ) : null}
+              ) : (
+                <DateRangePicker
+                  from={editing.date}
+                  to={editing.endDate}
+                  onChange={({ from, to }) =>
+                    setEditing((current) =>
+                      current ? { ...current, date: from, endDate: to } : current,
+                    )
+                  }
+                  placeholder="Диапазон события"
+                />
+              )}
               <div className="rounded-xl border border-[var(--line)] bg-white p-2">
                 <p className="text-xs text-[color:rgba(63,58,52,.68)]">
                   Участники
