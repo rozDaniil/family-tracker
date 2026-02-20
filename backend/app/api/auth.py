@@ -1,5 +1,5 @@
 ﻿from datetime import datetime, timedelta
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from uuid import UUID
 
 import httpx
@@ -35,6 +35,7 @@ from app.schemas.common import (
     VerifyEmailResendIn,
 )
 from app.services.rate_limiter import InMemoryRateLimiter
+from app.services.email import send_verify_email
 from app.services.security import (
     create_access_token,
     generate_opaque_token,
@@ -213,6 +214,24 @@ def _issue_email_token(db: Session, user_id: UUID, purpose: EmailTokenPurpose, t
     return raw
 
 
+def _build_frontend_url(path: str = "", query: dict[str, str] | None = None) -> str:
+    base = settings.frontend_url.rstrip("/")
+    target = f"{base}/{path.lstrip('/')}" if path else base
+    if not query:
+        return target
+
+    parsed = urlsplit(target)
+    current_query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    current_query.update({key: value for key, value in query.items() if value})
+    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, urlencode(current_query), parsed.fragment))
+
+
+def _redirect_to_auth_error(error_code: str) -> RedirectResponse:
+    redirect = RedirectResponse(url=_build_frontend_url("/auth", {"oauth_error": error_code}))
+    redirect.delete_cookie("flc_google_state", path="/")
+    return redirect
+
+
 @router.post("/signup", response_model=SessionOut, status_code=status.HTTP_201_CREATED)
 def signup(payload: SignupIn, response: Response, db: Session = Depends(get_db)) -> SessionOut:
     email = _normalize_email(payload.email)
@@ -233,9 +252,12 @@ def signup(payload: SignupIn, response: Response, db: Session = Depends(get_db))
     project, member = _create_user_project_graph(db, user, payload.display_name.strip())
     refresh_raw, refresh_session = _issue_refresh_session(db, user.id, payload.remember_me)
 
-    _issue_email_token(db, user.id, EmailTokenPurpose.verify_email, ttl_hours=24)
+    verify_token = _issue_email_token(db, user.id, EmailTokenPurpose.verify_email, ttl_hours=24)
 
     db.commit()
+    if user.email:
+        verify_url = _build_frontend_url("/auth/verify", {"token": verify_token})
+        send_verify_email(to_email=user.email, display_name=user.display_name, verify_url=verify_url)
     _set_auth_cookies(response, user, refresh_raw, payload.remember_me, refresh_session.expires_at)
     return _build_session_out(user, member, project)
 
@@ -336,8 +358,10 @@ def resend_verify_email(
     email = _normalize_email(payload.email)
     user = db.query(User).filter(User.email == email).first()
     if user and not user.email_verified:
-        _issue_email_token(db, user.id, EmailTokenPurpose.verify_email, ttl_hours=24)
+        verify_token = _issue_email_token(db, user.id, EmailTokenPurpose.verify_email, ttl_hours=24)
         db.commit()
+        verify_url = _build_frontend_url("/auth/verify", {"token": verify_token})
+        send_verify_email(to_email=user.email, display_name=user.display_name, verify_url=verify_url)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -405,9 +429,9 @@ def reset_password(payload: PasswordResetIn, db: Session = Depends(get_db)) -> R
 
 
 @router.get("/google/start")
-def google_start(response: Response) -> RedirectResponse:
+def google_start() -> RedirectResponse:
     if not settings.google_client_id or not settings.google_redirect_uri:
-        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Google OAuth is not configured")
+        return _redirect_to_auth_error("google_not_configured")
     state_raw = generate_opaque_token()
     state_signed = sign_csrf_token(state_raw, settings.csrf_secret)
     secure = settings.frontend_url.startswith("https://")
@@ -437,41 +461,55 @@ def google_start(response: Response) -> RedirectResponse:
 
 
 @router.get("/google/callback")
-def google_callback(code: str, state: str, request: Request, db: Session = Depends(get_db)) -> RedirectResponse:
+def google_callback(
+    request: Request,
+    db: Session = Depends(get_db),
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+) -> RedirectResponse:
     if not settings.google_client_id or not settings.google_client_secret or not settings.google_redirect_uri:
-        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Google OAuth is not configured")
+        return _redirect_to_auth_error("google_not_configured")
+    if error:
+        return _redirect_to_auth_error("google_access_denied")
+    if not code or not state:
+        return _redirect_to_auth_error("google_invalid_callback")
     cookie_state = request.cookies.get("flc_google_state")
     if not cookie_state or cookie_state != state:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OAuth state")
+        return _redirect_to_auth_error("google_invalid_state")
 
-    with httpx.Client(timeout=10) as client:
-        token_res = client.post(
-            "https://oauth2.googleapis.com/token",
-            data={
-                "code": code,
-                "client_id": settings.google_client_id,
-                "client_secret": settings.google_client_secret,
-                "redirect_uri": settings.google_redirect_uri,
-                "grant_type": "authorization_code",
-            },
-        )
-        if token_res.status_code >= 400:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google token exchange failed")
-        id_token = token_res.json().get("id_token")
-        if not id_token:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing id_token")
+    try:
+        with httpx.Client(timeout=10) as client:
+            token_res = client.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "code": code,
+                    "client_id": settings.google_client_id,
+                    "client_secret": settings.google_client_secret,
+                    "redirect_uri": settings.google_redirect_uri,
+                    "grant_type": "authorization_code",
+                },
+            )
+            if token_res.status_code >= 400:
+                return _redirect_to_auth_error("google_token_exchange_failed")
+            token_payload = token_res.json()
+            id_token = token_payload.get("id_token")
+            if not id_token:
+                return _redirect_to_auth_error("google_missing_id_token")
 
-        userinfo_res = client.get(
-            "https://openidconnect.googleapis.com/v1/userinfo",
-            headers={"Authorization": f"Bearer {token_res.json().get('access_token', '')}"},
-        )
-        if userinfo_res.status_code >= 400:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google userinfo failed")
-        info = userinfo_res.json()
+            userinfo_res = client.get(
+                "https://openidconnect.googleapis.com/v1/userinfo",
+                headers={"Authorization": f"Bearer {token_payload.get('access_token', '')}"},
+            )
+            if userinfo_res.status_code >= 400:
+                return _redirect_to_auth_error("google_userinfo_failed")
+            info = userinfo_res.json()
+    except httpx.HTTPError:
+        return _redirect_to_auth_error("google_network_error")
 
     email = _normalize_email(info.get("email", ""))
     if not email:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google account email is unavailable")
+        return _redirect_to_auth_error("google_email_unavailable")
     display_name = (info.get("name") or "Пользователь").strip()
 
     user = db.query(User).filter(User.email == email).first()

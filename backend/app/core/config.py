@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     access_ttl_minutes: int = 15
     refresh_ttl_days: int = 30
     frontend_url: str = "http://localhost:3000"
+    resend_api_key: str | None = None
+    resend_sender_email: str | None = None
+    resend_sender_name: str = "Family Life"
+    resend_api_base_url: str = "https://api.resend.com"
     google_client_id: str | None = None
     google_client_secret: str | None = None
     google_redirect_uri: str | None = None

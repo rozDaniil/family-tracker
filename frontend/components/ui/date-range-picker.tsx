@@ -5,7 +5,11 @@ import { format } from "date-fns";
 import type { DateRange } from "react-day-picker";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 function parseDateKey(value?: string | null): Date | undefined {
   if (!value) return undefined;
@@ -64,10 +68,11 @@ export function DateRangePicker({
         <PopoverContent align="start" className="w-auto p-0">
           <Calendar
             mode="range"
-            numberOfMonths={2}
+            defaultMonth={fromDate}
+            numberOfMonths={1}
             selected={selectedRange}
             onSelect={(next) => {
-              if (!next?.from) {
+              if (!next || !next.from) {
                 onChange({ from: "", to: "" });
                 return;
               }
@@ -85,7 +90,12 @@ export function DateRangePicker({
           size="icon"
           disabled={disabled}
           aria-label="Clear range"
-          onClick={() => onChange({ from: "", to: "" })}
+          onClick={() =>
+            onChange({
+              from: formatDateKey(new Date()),
+              to: "",
+            })
+          }
           className="rounded-xl"
         >
           <X className="h-3.5 w-3.5" />

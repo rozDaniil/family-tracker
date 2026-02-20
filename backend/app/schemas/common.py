@@ -39,6 +39,8 @@ class ProjectPatchIn(BaseModel):
 class MemberOut(BaseModel):
     id: UUID
     project_id: UUID
+    user_id: UUID
+    invited_by: UUID | None
     display_name: str
     avatar_url: str | None
     status: MemberStatusSchema
@@ -117,6 +119,19 @@ class EventPatchIn(BaseModel):
     end_date_local: date | None = None
     start_at: datetime | None = None
     end_at: datetime | None = None
+
+
+class EventCommentOut(BaseModel):
+    id: UUID
+    event_id: UUID
+    project_id: UUID
+    author_member_id: UUID
+    text: str
+    created_at: datetime
+
+
+class EventCommentCreateIn(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
 
 
 class AuthSessionIn(BaseModel):
@@ -211,11 +226,23 @@ class CircleNicknamePatchIn(BaseModel):
 
 class InviteCreateIn(BaseModel):
     expires_in_hours: int | None = Field(default=72, ge=1, le=720)
+    recipient_email: str | None = Field(default=None, min_length=5, max_length=255)
+    recipient_name: str | None = Field(default=None, max_length=120)
 
 
 class InviteCreateOut(BaseModel):
     invite_url: str
     expires_at: datetime | None
+
+
+class InvitePendingOut(BaseModel):
+    id: UUID
+    recipient_email: str
+    display_name: str
+    invite_url: str | None = None
+    expires_at: datetime | None
+    created_at: datetime
+    is_expired: bool
 
 
 class InviteAcceptIn(BaseModel):

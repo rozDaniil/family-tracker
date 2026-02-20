@@ -35,17 +35,20 @@ export function Calendar({
         weekday:
           "text-center text-[11px] font-semibold uppercase tracking-[0.08em] text-[color:rgba(63,58,52,.68)]",
         week: "mt-1 grid grid-cols-7",
-        day: "text-center text-sm",
+        day: "p-0 text-center text-sm",
         day_button:
-          "mx-auto h-8 w-8 rounded-md text-sm transition hover:bg-[var(--panel-soft)]",
-        selected:
-          "bg-[var(--accent)] text-white hover:bg-[color:rgba(180,143,104,0.95)]",
+          "mx-auto h-8 w-8 rounded-md p-0 text-sm transition hover:bg-[var(--panel-soft)]",
+        // selected:
+        //   "bg-transparent [&>button]:bg-[var(--accent)] [&>button]:text-white [&>button:hover]:bg-[color:rgba(180,143,104,0.95)]",
         today:
-          "ring-1 ring-[var(--accent-ink)] ring-offset-1 ring-offset-white",
+          "bg-transparent [&>button]:bg-[color:rgba(180,143,104,0.14)] [&>button]:text-[var(--accent-ink)]",
         outside: "text-[color:rgba(63,58,52,.38)]",
-        range_start: "rounded-l-md bg-[var(--accent)] text-white",
-        range_middle: "rounded-none bg-[color:rgba(180,143,104,0.22)]",
-        range_end: "rounded-r-md bg-[var(--accent)] text-white",
+        range_start:
+          "bg-transparent [&>button]:bg-[var(--accent)] [&>button]:text-white [&>button]:rounded-l-md [&>button]:rounded-r-none",
+        range_middle:
+          "bg-transparent [&>button]:bg-[color:rgba(180,143,104,0.2)] [&>button]:text-[var(--accent-ink)] [&>button]:rounded-none",
+        range_end:
+          "bg-transparent [&>button]:bg-[var(--accent)] [&>button]:text-white [&>button]:rounded-r-md [&>button]:rounded-l-none",
         disabled: "opacity-40",
         ...classNames,
       }}

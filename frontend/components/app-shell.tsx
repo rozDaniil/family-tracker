@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -7,7 +7,7 @@ import { useEffect } from "react";
 import { useSessionStore } from "@/stores/session-store";
 
 const NAV_ITEMS = [
-  { href: "/", label: "Сегодня", icon: Home, exact: true },
+  { href: "/today", label: "Сегодня", icon: Home, exact: true },
   { href: "/calendars", label: "Календари", icon: LayoutGrid, exact: false },
   { href: "/timeline", label: "Таймлайн", icon: Clock3, exact: true },
   { href: "/categories", label: "Категории", icon: Tags, exact: true },
@@ -20,24 +20,30 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { ensureSession, loading, project, token } = useSessionStore();
 
+  const isAuthPage = pathname.startsWith("/auth");
+  const isPublicLanding = pathname === "/";
+
   useEffect(() => {
-    if (pathname.startsWith("/auth")) return;
+    if (isAuthPage || isPublicLanding) return;
     void ensureSession();
-  }, [ensureSession, pathname]);
+  }, [ensureSession, isAuthPage, isPublicLanding]);
 
   useEffect(() => {
     if (loading) return;
-    const isAuthPage = pathname.startsWith("/auth");
-    if (!token && !isAuthPage) {
+    if (!token && !isAuthPage && !isPublicLanding) {
       router.replace("/auth");
       return;
     }
     if (token && isAuthPage) {
-      router.replace("/");
+      router.replace("/today");
     }
-  }, [loading, pathname, router, token]);
+  }, [isAuthPage, isPublicLanding, loading, router, token]);
 
-  if (pathname.startsWith("/auth")) {
+  if (isPublicLanding) {
+    return <div className="min-h-screen">{children}</div>;
+  }
+
+  if (isAuthPage) {
     return <div className="min-h-screen p-4 md:p-6">{children}</div>;
   }
 

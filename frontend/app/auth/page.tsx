@@ -1,11 +1,25 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { FormEvent, Suspense, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useSessionStore } from "@/stores/session-store";
 
-export default function AuthPage() {
+const OAUTH_ERRORS: Record<string, string> = {
+  google_not_configured: "Вход через Google пока не настроен на сервере.",
+  google_access_denied: "Вход через Google отменен.",
+  google_invalid_callback: "Google вернул неполный ответ. Попробуйте еще раз.",
+  google_invalid_state: "Сессия входа устарела. Запустите вход через Google заново.",
+  google_token_exchange_failed: "Не удалось завершить вход через Google.",
+  google_missing_id_token: "Google вернул неполные данные входа.",
+  google_userinfo_failed: "Не удалось получить профиль Google.",
+  google_network_error: "Ошибка сети при входе через Google.",
+  google_email_unavailable: "У аккаунта Google недоступен email.",
+};
+
+function AuthPageContent() {
+  const searchParams = useSearchParams();
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
@@ -14,6 +28,10 @@ export default function AuthPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const { login, signup } = useSessionStore();
+  const oauthErrorCode = searchParams.get("oauth_error");
+  const oauthErrorMessage = oauthErrorCode ? (OAUTH_ERRORS[oauthErrorCode] ?? "Ошибка входа через Google.") : null;
+  const passwordError = error?.includes("Пароль") ? error : null;
+  const genericError = passwordError ? null : error;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -24,6 +42,16 @@ export default function AuthPage() {
     const storedEmail = window.localStorage.getItem("flc.auth_email") ?? "";
     setEmail(storedEmail);
   }, []);
+
+  function switchMode(nextMode: "login" | "signup") {
+    if (nextMode === mode) return;
+    const preservedEmail = rememberMe ? email : "";
+    setMode(nextMode);
+    setDisplayName("");
+    setPassword("");
+    setError(null);
+    setEmail(preservedEmail);
+  }
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -62,14 +90,14 @@ export default function AuthPage() {
       <div className="mt-3 flex gap-2">
         <button
           type="button"
-          onClick={() => setMode("login")}
+          onClick={() => switchMode("login")}
           className={`rounded-lg px-3 py-1 text-sm ${mode === "login" ? "bg-[var(--accent)] text-white" : "bg-[var(--panel-soft)]"}`}
         >
           Вход
         </button>
         <button
           type="button"
-          onClick={() => setMode("signup")}
+          onClick={() => switchMode("signup")}
           className={`rounded-lg px-3 py-1 text-sm ${mode === "signup" ? "bg-[var(--accent)] text-white" : "bg-[var(--panel-soft)]"}`}
         >
           Регистрация
@@ -102,6 +130,7 @@ export default function AuthPage() {
           autoComplete={mode === "login" ? "current-password" : "new-password"}
           className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm outline-none"
         />
+        {passwordError ? <p className="text-xs text-[color:#8B5D55]">{passwordError}</p> : null}
         <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -111,7 +140,8 @@ export default function AuthPage() {
           />
           Запомнить меня
         </label>
-        {error ? <p className="text-xs text-[color:#8B5D55]">{error}</p> : null}
+        {genericError ? <p className="text-xs text-[color:#8B5D55]">{genericError}</p> : null}
+        {!genericError && oauthErrorMessage ? <p className="text-xs text-[color:#8B5D55]">{oauthErrorMessage}</p> : null}
         <button
           type="submit"
           disabled={busy}
@@ -135,5 +165,15 @@ export default function AuthPage() {
         </div>
       </div>
     </section>
+  );
+}
+
+export default function AuthPage() {
+  return (
+    <Suspense
+      fallback={<section className="mx-auto max-w-md rounded-2xl border border-[var(--line)] bg-white/80 p-5" />}
+    >
+      <AuthPageContent />
+    </Suspense>
   );
 }

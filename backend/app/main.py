@@ -6,7 +6,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
-from app.api import auth, categories, events, invites, lenses, members, profile, projects
+from app.api import auth, categories, events, invites, lenses, live, members, profile, projects
 from app.core.config import settings
 from app.core.db import Base, engine
 from app.core.logging import setup_sensitive_log_redaction
@@ -154,12 +154,50 @@ def on_startup() -> None:
             elif engine.dialect.name == "postgresql":
                 connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_users_email_not_null ON users(email)"))
 
+    if "members" in inspector.get_table_names():
+        member_columns = {column["name"] for column in inspector.get_columns("members")}
+        if "invited_by" not in member_columns:
+            with engine.begin() as connection:
+                if engine.dialect.name == "postgresql":
+                    connection.execute(text("ALTER TABLE members ADD COLUMN invited_by UUID"))
+                    connection.execute(text("CREATE INDEX IF NOT EXISTS ix_members_invited_by ON members(invited_by)"))
+                else:
+                    connection.execute(text("ALTER TABLE members ADD COLUMN invited_by TEXT"))
+                    connection.execute(text("CREATE INDEX IF NOT EXISTS ix_members_invited_by ON members(invited_by)"))
+
     if "refresh_sessions" in inspector.get_table_names():
         refresh_columns = {column["name"] for column in inspector.get_columns("refresh_sessions")}
         if "remember_me" not in refresh_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE refresh_sessions ADD COLUMN remember_me BOOLEAN DEFAULT 0"))
                 connection.execute(text("UPDATE refresh_sessions SET remember_me = 0 WHERE remember_me IS NULL"))
+
+    if "invite_links" in inspector.get_table_names():
+        invite_columns = {column["name"] for column in inspector.get_columns("invite_links")}
+        with engine.begin() as connection:
+            if "recipient_email" not in invite_columns:
+                connection.execute(text("ALTER TABLE invite_links ADD COLUMN recipient_email VARCHAR(255)"))
+            if "recipient_name" not in invite_columns:
+                connection.execute(text("ALTER TABLE invite_links ADD COLUMN recipient_name VARCHAR(120)"))
+            if "accepted_at" not in invite_columns:
+                if engine.dialect.name == "postgresql":
+                    connection.execute(text("ALTER TABLE invite_links ADD COLUMN accepted_at TIMESTAMPTZ"))
+                else:
+                    connection.execute(text("ALTER TABLE invite_links ADD COLUMN accepted_at DATETIME"))
+            if "accepted_member_id" not in invite_columns:
+                if engine.dialect.name == "postgresql":
+                    connection.execute(text("ALTER TABLE invite_links ADD COLUMN accepted_member_id UUID"))
+                else:
+                    connection.execute(text("ALTER TABLE invite_links ADD COLUMN accepted_member_id TEXT"))
+            if engine.dialect.name == "sqlite":
+                connection.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_invite_links_recipient_email "
+                        "ON invite_links(recipient_email)"
+                    )
+                )
+            elif engine.dialect.name == "postgresql":
+                connection.execute(text("CREATE INDEX IF NOT EXISTS ix_invite_links_recipient_email ON invite_links(recipient_email)"))
 
     with Session(engine) as db:
         legacy_lenses = (
@@ -212,3 +250,4 @@ app.include_router(profile.router, prefix=settings.api_prefix)
 app.include_router(categories.router, prefix=settings.api_prefix)
 app.include_router(events.router, prefix=settings.api_prefix)
 app.include_router(lenses.router, prefix=settings.api_prefix)
+app.include_router(live.router, prefix=settings.api_prefix)

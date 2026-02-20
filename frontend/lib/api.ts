@@ -1,8 +1,37 @@
-﻿import type { CalendarLens, Category, CircleContact, EventItem, FamilyProject, Member, ProfileItem } from "@/lib/types";
+import type { CalendarLens, Category, CircleContact, EventComment, EventItem, FamilyProject, Member, PendingInvite, ProfileItem } from "@/lib/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
 
 let refreshPromise: Promise<void> | null = null;
+
+const FRIENDLY_ERROR_MESSAGES: Record<string, string> = {
+  "Invalid credentials": "Неверный email или пароль.",
+  "Lens not found": "Календарь не найден или у вас нет доступа.",
+  "Members can only be added via invite acceptance": "Участников можно добавлять только через приглашение.",
+  "String should have at least 8 characters": "Пароль должен содержать минимум 8 символов.",
+  "Only event author can edit this event": "Редактировать событие может только его автор.",
+};
+
+function toFriendlyError(detail: string): string {
+  return FRIENDLY_ERROR_MESSAGES[detail] ?? detail;
+}
+
+function extractApiErrorMessage(body: string): string | null {
+  if (!body) return null;
+  try {
+    const parsed = JSON.parse(body) as { detail?: unknown };
+    if (typeof parsed.detail === "string" && parsed.detail.trim()) {
+      return toFriendlyError(parsed.detail.trim());
+    }
+    if (Array.isArray(parsed.detail) && parsed.detail.length > 0) {
+      const first = parsed.detail[0] as { msg?: string } | undefined;
+      if (first?.msg) return toFriendlyError(first.msg);
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
 
 function readCookie(name: string): string | null {
   if (typeof document === "undefined") return null;
@@ -72,12 +101,9 @@ async function request<T>(path: string, init: RequestInit = {}, allowRefresh = t
   if (!response.ok) {
     const body = await response.text();
     if (body) {
-      try {
-        const parsed = JSON.parse(body) as { detail?: string };
-        if (parsed?.detail) throw new Error(parsed.detail);
-      } catch {
-        throw new Error(body);
-      }
+      const parsedMessage = extractApiErrorMessage(body);
+      if (parsedMessage) throw new Error(parsedMessage);
+      throw new Error("Не удалось выполнить запрос к серверу.");
     }
     throw new Error(`Request failed with ${response.status}`);
   }
@@ -296,14 +322,35 @@ export const api = {
       },
     );
   },
-  createInviteLink(_token?: string) {
+  createInviteLink(
+    _token: string | undefined,
+    payload?: { recipient_email?: string; recipient_name?: string; expires_in_hours?: number },
+  ) {
     void _token;
     return request<{ invite_url: string; expires_at: string | null }>(
       "/invites/link",
       {
         method: "POST",
-        body: JSON.stringify({ expires_in_hours: 72 }),
+        body: JSON.stringify({
+          expires_in_hours: payload?.expires_in_hours ?? 72,
+          recipient_email: payload?.recipient_email,
+          recipient_name: payload?.recipient_name,
+        }),
       },
+    );
+  },
+  getPendingInvites(_token?: string) {
+    void _token;
+    return request<PendingInvite[]>("/invites/pending");
+  },
+  acceptInvite(payload: { token: string; display_name: string }) {
+    return request<{ user: { id: string; display_name: string; email: string | null; email_verified: boolean; avatar_url: string | null }; project: FamilyProject; member: Member; email_verified: boolean }>(
+      "/invites/accept",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      false,
     );
   },
   getLenses(_token?: string) {
@@ -397,5 +444,18 @@ export const api = {
       },
     );
   },
+  getEventComments(_token: string | undefined, eventId: string) {
+    return request<EventComment[]>(`/events/${eventId}/comments`);
+  },
+  createEventComment(_token: string | undefined, eventId: string, payload: { text: string }) {
+    return request<EventComment>(
+      `/events/${eventId}/comments`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+    );
+  },
 };
+
 

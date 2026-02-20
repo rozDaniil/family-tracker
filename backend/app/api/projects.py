@@ -5,6 +5,7 @@ from app.api.deps import get_current_project
 from app.core.db import get_db
 from app.models import FamilyProject
 from app.schemas.common import FamilyProjectOut, ProjectPatchIn
+from app.services.live import live_broker, make_live_message, project_meta_channel
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -27,4 +28,14 @@ def patch_project(
     db.add(project)
     db.commit()
     db.refresh(project)
-    return FamilyProjectOut.model_validate(project, from_attributes=True)
+    out = FamilyProjectOut.model_validate(project, from_attributes=True)
+    message = make_live_message(
+        project_id=out.id,
+        calendar_id=None,
+        message_type="project.updated",
+        entity_id=out.id,
+        payload=out.model_dump(mode="json"),
+        updated_at=None,
+    )
+    live_broker.publish(project_meta_channel(out.id), message)
+    return out

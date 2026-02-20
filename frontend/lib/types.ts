@@ -53,9 +53,29 @@ export interface FamilyProject {
 export interface Member {
   id: UUID;
   project_id: UUID;
+  user_id: UUID;
   display_name: string;
   avatar_url?: string | null;
   status: "active" | "invited";
+}
+
+export interface EventComment {
+  id: UUID;
+  event_id: UUID;
+  project_id: UUID;
+  author_member_id: UUID;
+  text: string;
+  created_at: string;
+}
+
+export interface PendingInvite {
+  id: UUID;
+  recipient_email: string;
+  display_name: string;
+  invite_url: string | null;
+  expires_at: string | null;
+  created_at: string;
+  is_expired: boolean;
 }
 
 export interface Category {
@@ -102,4 +122,31 @@ export interface CalendarLens {
   created_by: UUID;
   created_at: string;
   updated_at: string;
+}
+
+export type LiveType =
+  | "event.created"
+  | "event.updated"
+  | "event.deleted"
+  | "event.started"
+  | "event.stopped"
+  | "comment.added"
+  | "calendar.updated"
+  | "calendar.deleted"
+  | "member.changed"
+  | "project.updated"
+  | "system.connected"
+  | "system.resync_required"
+  | "system.ping";
+
+export type LiveConnectionState = "connecting" | "connected" | "disconnected";
+
+export interface LiveMessage<T = unknown> {
+  id: string;
+  projectId: UUID;
+  calendarId: UUID | null;
+  type: LiveType;
+  entityId: string;
+  payload: T | null;
+  updatedAt: string;
 }

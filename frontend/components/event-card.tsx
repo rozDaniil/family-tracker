@@ -12,6 +12,7 @@ export function EventCard({
   category,
   member,
   memberNames,
+  authorName,
   onStop,
   onOpen,
 }: {
@@ -19,6 +20,7 @@ export function EventCard({
   category?: Category;
   member?: Member;
   memberNames?: string[];
+  authorName?: string;
   onStop?: (eventId: string) => void;
   onOpen?: () => void;
 }) {
@@ -75,6 +77,7 @@ export function EventCard({
             {startDate} {"->"} {endDate}
           </span>
         )}
+        {authorName ? <span>Автор: {authorName}</span> : null}
         {participantsLabel ? <span>Участники: {participantsLabel}</span> : null}
       </div>
     </article>

@@ -46,7 +46,10 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
-    memberships: Mapped[list["Member"]] = relationship(back_populates="user")
+    memberships: Mapped[list["Member"]] = relationship(
+        back_populates="user",
+        foreign_keys="Member.user_id",
+    )
 
 
 class FamilyProject(Base):
@@ -67,13 +70,22 @@ class Member(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("family_projects.id"), index=True)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
+    invited_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id"),
+        index=True,
+        nullable=True,
+    )
     display_name: Mapped[str] = mapped_column(String(120))
     avatar_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[MemberStatus] = mapped_column(Enum(MemberStatus), default=MemberStatus.active)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
     project: Mapped["FamilyProject"] = relationship(back_populates="members")
-    user: Mapped["User"] = relationship(back_populates="memberships")
+    user: Mapped["User"] = relationship(
+        back_populates="memberships",
+        foreign_keys=[user_id],
+    )
 
 
 class Category(Base):
@@ -123,14 +135,33 @@ class Event(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class EventComment(Base):
+    __tablename__ = "event_comments"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    event_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("events.id"), index=True)
+    project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("family_projects.id"), index=True)
+    author_member_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("members.id"), index=True)
+    text: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
 class InviteLink(Base):
     __tablename__ = "invite_links"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("family_projects.id"), index=True)
     token_hash: Mapped[str] = mapped_column(String(128), unique=True)
+    recipient_email: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    recipient_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_revoked: Mapped[bool] = mapped_column(Boolean, default=False)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    accepted_member_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("members.id"),
+        nullable=True,
+    )
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 

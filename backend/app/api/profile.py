@@ -16,6 +16,7 @@ from app.schemas.common import (
     ProfilePatchIn,
 )
 from app.services.rate_limiter import InMemoryRateLimiter
+from app.services.email import send_verify_email
 from app.services.security import generate_opaque_token, hash_password, hash_token, verify_password
 
 router = APIRouter(prefix="/profile", tags=["profile"])
@@ -28,16 +29,18 @@ def _now():
     return datetime.utcnow()
 
 
-def _issue_email_verify_token(db: Session, user_id: UUID) -> None:
+def _issue_email_verify_token(db: Session, user_id: UUID) -> str:
     from datetime import timedelta
 
+    raw = generate_opaque_token()
     token = EmailToken(
         user_id=user_id,
         purpose=EmailTokenPurpose.verify_email,
-        token_hash=hash_token(generate_opaque_token()),
+        token_hash=hash_token(raw),
         expires_at=_now() + timedelta(hours=24),
     )
     db.add(token)
+    return raw
 
 
 def _build_profile(user: User) -> ProfileOut:
@@ -199,8 +202,10 @@ def resend_verification(
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests")
 
     if user.email and not user.email_verified:
-        _issue_email_verify_token(db, user.id)
+        verify_token = _issue_email_verify_token(db, user.id)
         db.commit()
+        verify_url = f"{settings.frontend_url.rstrip('/')}/auth/verify?token={verify_token}"
+        send_verify_email(to_email=user.email, display_name=user.display_name, verify_url=verify_url)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
